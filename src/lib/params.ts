@@ -15,6 +15,16 @@ export function parseFilterValue(param: any) {
   return { operator: OPERATORS.equals, value: param };
 }
 
+export const SESSION_PROPERTY_PREFIX = 'sp.';
+
+export function isSessionProperty(name: string): boolean {
+  return name.startsWith(SESSION_PROPERTY_PREFIX);
+}
+
+export function getSessionPropertyKey(name: string): string {
+  return name.slice(SESSION_PROPERTY_PREFIX.length);
+}
+
 export function isEqualsOperator(operator: any) {
   return [OPERATORS.equals, OPERATORS.notEquals].includes(operator);
 }

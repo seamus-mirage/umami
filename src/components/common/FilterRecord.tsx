@@ -1,9 +1,9 @@
 import { Button, Column, Grid, Icon, Label, ListItem, Select, TextField } from '@umami/react-zen';
 import { useState } from 'react';
 import { Empty } from '@/components/common/Empty';
-import { useFilters, useFormat, useWebsiteValuesQuery } from '@/components/hooks';
+import { useApi, useFilters, useFormat, useWebsiteValuesQuery } from '@/components/hooks';
 import { X } from '@/components/icons';
-import { isSearchOperator } from '@/lib/params';
+import { getSessionPropertyKey, isSearchOperator, isSessionProperty } from '@/lib/params';
 
 export interface FilterRecordProps {
   websiteId: string;
@@ -13,6 +13,7 @@ export interface FilterRecordProps {
   name: string;
   operator: string;
   value: string;
+  fields?: { name: string; type: string; label: string }[];
   onSelect?: (name: string, value: any) => void;
   onRemove?: (name: string) => void;
   onChange?: (name: string, value: string) => void;
@@ -26,21 +27,47 @@ export function FilterRecord({
   name,
   operator,
   value,
+  fields: fieldsProp,
   onSelect,
   onRemove,
   onChange,
 }: FilterRecordProps) {
-  const { fields, operators } = useFilters();
+  const { fields: defaultFields, operators } = useFilters();
+  const fields = fieldsProp || defaultFields;
   const [selected, setSelected] = useState(value);
   const [search, setSearch] = useState('');
   const { formatValue } = useFormat();
-  const { data, isLoading } = useWebsiteValuesQuery({
-    websiteId,
+  const { get, useQuery } = useApi();
+
+  const propertyKey = isSessionProperty(name) ? getSessionPropertyKey(name) : undefined;
+
+  const websiteValuesQuery = useWebsiteValuesQuery({
+    websiteId: isSessionProperty(name) ? '' : websiteId,
     type,
     search,
     startDate,
     endDate,
   });
+
+  const sessionDataValuesQuery = useQuery<any>({
+    queryKey: [
+      'websites:session-data:values',
+      { websiteId, propertyName: propertyKey, startAt: +startDate, endAt: +endDate, search },
+    ],
+    queryFn: () =>
+      get(`/websites/${websiteId}/session-data/values`, {
+        startAt: +startDate,
+        endAt: +endDate,
+        propertyName: propertyKey,
+        search,
+      }),
+    enabled: !!(isSessionProperty(name) && websiteId && propertyKey),
+  });
+
+  const { data, isLoading } = isSessionProperty(name)
+    ? sessionDataValuesQuery
+    : websiteValuesQuery;
+
   const isSearch = isSearchOperator(operator);
   const items = data?.filter(({ value }) => value) || [];
 
