@@ -162,6 +162,7 @@ export const labels = defineMessages({
   reports: { id: 'label.reports', defaultMessage: 'Reports' },
   eventData: { id: 'label.event-data', defaultMessage: 'Event data' },
   sessionData: { id: 'label.session-data', defaultMessage: 'Session data' },
+  userProperties: { id: 'label.user-properties', defaultMessage: 'User properties' },
   funnel: { id: 'label.funnel', defaultMessage: 'Funnel' },
   funnels: { id: 'label.funnels', defaultMessage: 'Funnels' },
   funnelDescription: {

@@ -3,7 +3,12 @@ import { readReplicas } from '@prisma/extension-read-replicas';
 import debug from 'debug';
 import { PrismaClient } from '@/generated/prisma/client';
 import { DEFAULT_PAGE_SIZE, FILTER_COLUMNS, OPERATORS, SESSION_COLUMNS } from './constants';
-import { filtersObjectToArray } from './params';
+import {
+  filtersObjectToArray,
+  getSessionPropertyKey,
+  isSessionProperty,
+  parseFilterValue,
+} from './params';
 import type { Operator, QueryFilters, QueryOptions } from './types';
 
 const log = debug('umami:prisma');
@@ -88,6 +93,47 @@ function mapFilter(column: string, operator: string, name: string, type: string 
   }
 }
 
+function getSessionDataFilterQuery(filters: Record<string, any>): string {
+  const sessionFilters = Object.keys(filters).filter(key => isSessionProperty(key));
+
+  if (sessionFilters.length === 0) {
+    return '';
+  }
+
+  return sessionFilters
+    .map((key, i) => {
+      const { operator } = parseFilterValue(filters[key]);
+      const propertyKey = getSessionPropertyKey(key);
+      const paramKey = `sp_${i}_key`;
+      const paramValue = `sp_${i}_value`;
+
+      let valueCondition: string;
+      switch (operator) {
+        case OPERATORS.contains:
+          valueCondition = `sd.string_value ilike {{${paramValue}}}`;
+          break;
+        case OPERATORS.doesNotContain:
+          valueCondition = `sd.string_value not ilike {{${paramValue}}}`;
+          break;
+        case OPERATORS.notEquals:
+          valueCondition = `sd.string_value != {{${paramValue}}}`;
+          break;
+        default:
+          valueCondition = `sd.string_value = {{${paramValue}}}`;
+          break;
+      }
+
+      return `and exists (
+      select 1 from session_data sd
+      where sd.session_id = website_event.session_id
+        and sd.website_id = website_event.website_id
+        and sd.data_key = {{${paramKey}}}
+        and ${valueCondition}
+    )`;
+    })
+    .join('\n');
+}
+
 function getFilterQuery(filters: Record<string, any>, options: QueryOptions = {}): string {
   const query = filtersObjectToArray(filters, options).reduce(
     (arr, { name, column, operator, prefix = '' }) => {
@@ -149,6 +195,21 @@ function getDateQuery(filters: Record<string, any>) {
   return '';
 }
 
+function getSessionDataQueryParams(filters: Record<string, any>) {
+  const sessionFilters = Object.keys(filters).filter(key => isSessionProperty(key));
+
+  return sessionFilters.reduce((obj, key, i) => {
+    const { operator, value } = parseFilterValue(filters[key]);
+    obj[`sp_${i}_key`] = getSessionPropertyKey(key);
+    obj[`sp_${i}_value`] = (
+      [OPERATORS.contains, OPERATORS.doesNotContain] as Operator[]
+    ).includes(operator)
+      ? `%${value}%`
+      : value;
+    return obj;
+  }, {} as Record<string, any>);
+}
+
 function getQueryParams(filters: Record<string, any>) {
   return {
     ...filters,
@@ -159,6 +220,7 @@ function getQueryParams(filters: Record<string, any>) {
 
       return obj;
     }, {}),
+    ...getSessionDataQueryParams(filters),
   };
 }
 
@@ -171,13 +233,17 @@ function parseFilters(filters: Record<string, any>, options?: QueryOptions) {
     Object.entries(filters).filter(([key]) => key.startsWith('cohort_')),
   );
 
+  const sessionDataFilterQuery = getSessionDataFilterQuery(filters);
+
   return {
     joinSessionQuery:
       options?.joinSession || joinSession
         ? `inner join session on website_event.session_id = session.session_id and website_event.website_id = session.website_id`
         : '',
     dateQuery: getDateQuery(filters),
-    filterQuery: getFilterQuery(filters, options),
+    filterQuery: [getFilterQuery(filters, options), sessionDataFilterQuery]
+      .filter(Boolean)
+      .join('\n'),
     queryParams: getQueryParams(filters),
     cohortQuery: getCohortQuery(cohortFilters),
   };

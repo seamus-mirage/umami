@@ -45,7 +45,7 @@ export function FilterEditForm({ websiteId, onChange, onClose }: FilterEditFormP
 
   return (
     <Column width={isMobile ? 'auto' : '800px'} gap="6">
-      <Column minHeight="500px">
+      <Column height="500px" overflow="hidden">
         <Tabs>
           <TabList>
             <Tab id="fields">{formatMessage(labels.fields)}</Tab>
