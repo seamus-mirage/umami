@@ -95,7 +95,7 @@ export function FieldFilters({ websiteId, value, exclude = [], onChange }: Field
   };
 
   return (
-    <Grid columns={{ xs: '1fr', md: '180px 1fr' }} overflow="hidden" gapY="6">
+    <Grid columns={{ xs: '1fr', md: '200px 1fr' }} overflow="hidden" gapY="6">
       <Row display={{ xs: 'flex', md: 'none' }}>
         <MenuTrigger>
           <Button>
